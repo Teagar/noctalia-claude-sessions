@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# Lista/foca janelas do kitty que rodam o Claude Code (para o launcher do Noctalia).
+#   noctalia-claude-sessions list           -> "Título<TAB>#id · workspace"
+#   noctalia-claude-sessions focus "<linha>" -> foca a janela pelo #id
+set -euo pipefail
+
+case "${1:-list}" in
+  list)
+    ws=$(niri msg -j workspaces)
+    niri msg -j windows | jq -r '.[] | select(.app_id=="kitty") | "\(.id)\t\(.pid)\t\(.workspace_id)\t\(.title)"' |
+    while IFS=$'\t' read -r id pid wsid title; do
+      pstree -p "$pid" 2>/dev/null | grep -q 'claude(' || continue
+      # tira o ícone de status do Claude (✳, spinner…) e caracteres que quebram o shell do exec
+      name=$(sed -E 's/^[^[:alnum:]]+ //; s/["`$\\'"'"']//g' <<<"$title")
+      wsname=$(jq -r --argjson w "$wsid" '.[] | select(.id==$w) | (.name // (.idx|tostring))' <<<"$ws")
+      printf '%s\t#%s · workspace %s\n' "$name" "$id" "$wsname"
+    done
+    ;;
+  focus)
+    id=$(grep -oE '#[0-9]+' <<<"${2:-}" | head -1 | tr -d '#')
+    if [[ -z "$id" ]]; then  # fallback: casa pelo título
+      sel=$(cut -f1 <<<"${2:-}")
+      id=$("$0" list | awk -F'\t' -v s="$sel" '$1==s {print $2; exit}' | grep -oE '[0-9]+' | head -1)
+    fi
+    [[ -n "$id" ]] && niri msg action focus-window --id "$id"
+    ;;
+esac

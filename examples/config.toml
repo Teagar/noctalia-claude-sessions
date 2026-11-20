@@ -1,0 +1,9 @@
+# Adicione ao final de ~/.config/noctalia/config.toml
+
+[shell.launcher.dmenu.entry.claude]
+command = "~/.local/bin/noctalia-claude-sessions list"
+exec = "~/.local/bin/noctalia-claude-sessions focus '{selection}'"
+label = "Sessões Claude"
+prefix = "cc"
+glyph = "robot"
+global = false
