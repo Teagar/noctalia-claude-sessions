@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Lista/foca janelas do kitty que rodam o Claude Code (para o launcher do Noctalia).
-#   noctalia-claude-sessions list           -> "Título<TAB>#id · workspace"
+#   noctalia-claude-sessions list           -> "Título [perfil]<TAB>#id · perfil · workspace"
+# perfil = qual diretório de config o Claude usa (CLAUDE_CONFIG_DIR):
+#   não definido -> "original" (~/.claude) | ~/.claude-<x> -> "<x>"
 #   noctalia-claude-sessions focus "<linha>" -> foca a janela pelo #id
 set -euo pipefail
 
@@ -9,11 +11,16 @@ case "${1:-list}" in
     ws=$(niri msg -j workspaces)
     niri msg -j windows | jq -r '.[] | select(.app_id=="kitty") | "\(.id)\t\(.pid)\t\(.workspace_id)\t\(.title)"' |
     while IFS=$'\t' read -r id pid wsid title; do
-      pstree -p "$pid" 2>/dev/null | grep -q 'claude(' || continue
+      cpid=$(pstree -p "$pid" 2>/dev/null | grep -oE 'claude\([0-9]+\)' | head -1 | grep -oE '[0-9]+') || continue
+      [[ -n "$cpid" ]] || continue
+      cfg=$(tr '\0' '\n' < "/proc/$cpid/environ" 2>/dev/null | sed -n 's/^CLAUDE_CONFIG_DIR=//p' | head -1) || true
+      if [[ -z "$cfg" ]]; then profile="original"; else
+        profile=$(basename "${cfg%/}"); profile=${profile#.claude-}; profile=${profile#.}
+      fi
       # tira o ícone de status do Claude (✳, spinner…) e caracteres que quebram o shell do exec
       name=$(sed -E 's/^[^[:alnum:]]+ //; s/["`$\\'"'"']//g' <<<"$title")
       wsname=$(jq -r --argjson w "$wsid" '.[] | select(.id==$w) | (.name // (.idx|tostring))' <<<"$ws")
-      printf '%s\t#%s · workspace %s\n' "$name" "$id" "$wsname"
+      printf '%s [%s]\t#%s · %s · workspace %s\n' "$name" "$profile" "$id" "$profile" "$wsname"
     done
     ;;
   focus)
